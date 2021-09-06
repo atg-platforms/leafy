@@ -6,6 +6,9 @@ var app = express(),
     mysql = require('mysql'),
     bodyParser = require('body-parser');
 
+const erc20token = require('./models/erc20token');
+const supplyChain = require('./models/supplychain');
+
 const username = process.env.DB_USER;
 const password = process.env.DB_PASS;
 const dbhost = process.env.DB_DBHOST;
@@ -25,6 +28,8 @@ const farmer = require('./models/farmer');
 app.use(bodyParser.json());
 
 app.use('/farmer', farmer);
+app.use('/token', erc20token);
+app.use('/supplychain', supplyChain);
 //app.use('/transactions', transactionsRouter);
 //app.use('/coins', erc20tokenRouter);
 
