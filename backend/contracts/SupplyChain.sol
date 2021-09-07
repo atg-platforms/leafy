@@ -72,17 +72,10 @@ contract supplyChain {
        return 0;
     }
 
-    // require that only current product owner is doing transaction
-    //??
-    modifier onlyOwner(uint32 _productId) {
-         require(msg.sender == products[_productId].productOwner,"");
-         _;
-    }
-
     // return true if transferring from Farmer to Consumer
     // else return false
 
-    function newOwner(uint32 _user1Id,uint32 _user2Id, uint32 _prodId) onlyOwner(_prodId) public returns (bool) {
+    function newOwner(uint32 _user1Id,uint32 _user2Id, uint32 _prodId) public returns (bool) {
         participant memory p1 = participants[_user1Id];
         participant memory p2 = participants[_user2Id];
         uint32 ownership_id = owner_id++;

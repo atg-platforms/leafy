@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 const express = require('express');
 const bodyParser = require('body-parser');
 const app = express();
@@ -5,11 +8,26 @@ const port = 3000;
 const Web3 = require('web3');
 const router = express.Router();
 const coinsABI = require('./ERC20Token.json');
-const chainUrl = 'HTTP://127.0.0.1:7545'; // change to your own chain url
-const web3 = new Web3(chainUrl);
+const Tx = require('ethereumjs-tx');
+
+// 1. Connect to Kaleido Blockchain
+const WEB3_USER = process.env.WEB3_USER;
+const WEB3_PASSWORD = process.env.WEB3_PASSWORD;
+const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
+const signer = process.env.signer;
+const signerKey = Buffer.from('process.env.signerKey','hex');
+const contractAddress = process.env.erc20ContractAddress;
+
+var transfer = '';
+
+const web3 = new Web3(new Web3.providers.HttpProvider(`https://${WEB3_USER}:${WEB3_PASSWORD}@${WEB3_PROVIDER}`));
+
+// 2. Validate Connection
+web3.eth.net.isListening() //Promise
+.then(() => console.log('Connected to LFY token'))
+.catch((err) => console.log(err))
 
 // update endpoint
-const contractAddress = '0x0Dd780E5e230077D66a7067f023C9AF28E5381e8'; // add contract address
 const coinsContract = new web3.eth.Contract(
     coinsABI,
     contractAddress,
@@ -49,7 +67,8 @@ router.post('/transfer', async (req, res) => {
   }
 
   try{
-    await coinsContract.methods.transfer(req.body.receiver, req.body.amount).send({from: req.body.sender});
+    const txData = coinsContract.methods.transfer(req.body.receiver, req.body.amount).encodeABI();
+    transfer = await buildSendTransaction(signer, signerKey, txData);
   } catch (error) {
     console.error(error);
     return res.status(500).json({
@@ -59,13 +78,13 @@ router.post('/transfer', async (req, res) => {
 
   res.status(200).json({
     message: 'Successfully transferred amount!',
+    txHash: transfer,
     amount: req.body.amount,
     recipient: req.body.receiver
   });
 });
 
 // mint coins
-// QUESTION: how to capture failed require statement from contract?
 router.post('/mint', async (req, res) => {
   console.log(req.body.minter+" calling mint of " +req.body.amount+" LFY for "+req.body.receiver);
   const isAddressNotValid = req.body.receiver.length !== 42;
@@ -77,7 +96,8 @@ router.post('/mint', async (req, res) => {
   }
 
   try {
-    await coinsContract.methods.mint(req.body.receiver, req.body.amount).send({from: req.body.minter});
+    const txData = coinsContract.methods.mint(req.body.receiver, req.body.amount).encodeABI();
+    transfer = await buildSendTransaction(signer, signerKey, txData);
   } catch (error) {
     console.error(error);
     return res.status(500).json({
@@ -87,10 +107,51 @@ router.post('/mint', async (req, res) => {
 
   res.status(200).json({
     message: 'Successfully mint!',
+    txHash: transfer,
     amount: req.body.amount,
     recipient: req.body.receiver
   });
 
+});
+
+// send and sign transaction
+async function buildSendTransaction(account, accountKey, data) {
+  // FORM TRANSACTION
+  const txParams = {
+      from: account,
+      nonce: await web3.eth.getTransactionCount(account),
+      to: contractAddress, // contract address
+      value: 0,
+      gasLimit: web3.utils.toHex(10000000),//limit of gas willing to spend
+      gasPrice: web3.utils.toHex(web3.utils.toWei('0','gwei')),//transaction fee
+      data,
+  };
+  
+  //BUILD TRANSACTION
+  const tx = new Tx(txParams);
+
+  //SIGN TRANSACTION
+  tx.sign(accountKey);
+  
+  //GET RAW TRANSACTION
+  const serializedTx = tx.serialize();
+  const rawTx = '0x' + serializedTx.toString('hex');
+  
+  //SEND SIGNED TRANSACTION
+  const transaction = await web3.eth.sendSignedTransaction(rawTx);
+  console.log('Transaction Hash: ', transaction.transactionHash);
+  return transaction.transactionHash;
+
+}
+
+
+router.get('/accounts', async (req, res) => {
+  web3.eth.getAccounts().then(accounts => {
+    res.status(200).json({
+      message: 'Accounts in node:',
+      addresses: accounts
+    });
+  });
 });
 
 module.exports = router ;

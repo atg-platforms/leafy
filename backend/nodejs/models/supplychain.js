@@ -5,11 +5,29 @@ const port = 3000;
 const Web3 = require('web3');
 const router = express.Router();
 const supplyChainABI = require('./supplyChain.json');
-const chainUrl = 'HTTP://127.0.0.1:7545'; // change to your own chain url
-const web3 = new Web3(chainUrl);
+const Tx = require('ethereumjs-tx');
+
+// 1. Connect to Kaleido Blockchain
+const WEB3_USER = process.env.WEB3_USER;
+const WEB3_PASSWORD = process.env.WEB3_PASSWORD;
+const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
+const signer = process.env.signer;
+const signerKey = Buffer.from('process.env.signerKey','hex');
+const contractAddress = process.env.supplyChainContractAddress;
+
+var transfer = '';
+const web3 = new Web3(new Web3.providers.HttpProvider(`https://${WEB3_USER}:${WEB3_PASSWORD}@${WEB3_PROVIDER}`));
+
+//2. Validate Connection
+web3.eth.net.isListening() //Promise
+.then(() => console.log('Connected to supply chain'))
+.catch((err) => console.log(err));
+
+web3.eth.accounts.create();
+
 
 // update endpoint
-const contractAddress = '0xC5A2Dc0EEB800FC88d36B7B472Fc0B3C8cb98F68'; // add contract address
+
 const supplyChainContract = new web3.eth.Contract(
     supplyChainABI,
     contractAddress,
@@ -35,7 +53,7 @@ router.get('/searchByType/:plantType', async (req, res) => {
     });
 });
 
-// search available products by farmer
+// search available products by farmer, returns array of product id.
 router.get('/searchByFarmer/:farmerId', async (req, res) => {
     console.log("getting products available from farmer: " + req.params.farmerId);
     var productsArr = [];
@@ -127,7 +145,7 @@ router.get('/getProduct/:prodId', async (req, res) => {
     });
 });
 
-// set new owner (farmer-consumer). created new ownership
+// set new owner (farmer-consumer). checks if request is by current owner then creates new ownership
 router.post('/newOwner', async (req, res) => {
     console.log("Setting new owner:");
     console.log(req.body);
@@ -156,6 +174,7 @@ router.post('/newOwner', async (req, res) => {
         await supplyChainContract.methods.getOwnershipDetails(latestOwnership).call()
         .then(function(stmt){
             ownerId=stmt[1];
+            ownerAddress=stmt[2];
         });
     } catch (error) {
     console.error(error);
@@ -164,29 +183,12 @@ router.post('/newOwner', async (req, res) => {
     });
     }
 
-    console.log(ownerId);
-    console.log(req.body.oldOwnerId);
-
-    //compare current owner and id1 in request
-    if (ownerId === req.body.oldOwnerId){
-
-        // get address of new owner of latest ownership
-        try{
-            await supplyChainContract.methods.getParticipant(req.body.oldOwnerId).call()
-            .then(function(stmt){
-                ownerAddress=stmt[0];
-            });
-        } catch (error) {
-        console.error(error);
-        return res.status(500).json({
-            message: 'Server Error when getting address of last owner ID'
-        });
-        }
-
+    //compare current owner and requestingId in request
+    if (ownerId === req.body.requestingId){
         // set new owner
         try{
-            console.log(ownerAddress);
-            await supplyChainContract.methods.newOwner(req.body.oldOwnerId,req.body.newOwnerId,req.body.productId).send({from: ownerAddress, gas: 6721975 });
+            const txData = supplyChainContract.methods.newOwner(req.body.requestingId, req.body.newOwnerId,req.body.productId).encodeABI();
+            transfer = await buildSendTransaction(signer, signerKey, txData);
         } catch (error) {
         console.error(error);
         return res.status(500).json({
@@ -209,23 +211,18 @@ router.post('/newOwner', async (req, res) => {
 });
 
 // add new Participant
-//QUESTION: .send before .call?
 router.post('/addParticipant', async (req, res) => {
     console.log("Adding new participant:");
     console.log(req.body);
 
     var userId;
-    const isAddressNotValid = req.body.address.length !== 42;
 
-    if (isAddressNotValid === true) {
-        return res.status(400).json({
-        message: 'Invalid address.'
-        });
-    }
+    const ethUser = web3.eth.accounts.create();
 
     try{
-        await supplyChainContract.methods.addParticipant(req.body.address, req.body.type).send({from: req.body.address});
-        await supplyChainContract.methods.addParticipant(req.body.address, req.body.type).call()
+        const txData = supplyChainContract.methods.addParticipant(ethUser.address, req.body.type).encodeABI();
+        transfer = await buildSendTransaction(signer, signerKey, txData);
+        await supplyChainContract.methods.addParticipant(ethUser.address, req.body.type).call()
         .then(function(uid){userId=uid-1;});
     } catch (error) {
     console.error(error);
@@ -236,14 +233,14 @@ router.post('/addParticipant', async (req, res) => {
 
     res.status(201).json({
         message: 'Successfully added participant!',
-        address: req.body.address,
+        txHash: transfer,
+        address: ethUser.address,
         participantType: req.body.type,
         userId: userId,
     });
 });
 
 // add new Product
-// QUESTION: send (out of gas) vs estimateGas?
 router.post('/addProduct', async (req, res) => {
     console.log("Adding new product:");
     console.log(req.body);
@@ -251,10 +248,9 @@ router.post('/addProduct', async (req, res) => {
     var prodId;
 
     try {
-        await supplyChainContract.methods.addProduct(req.body.farmer, req.body.plantType, req.body.unitCost).send({from: req.body.address,gas: 6721975});
-        await supplyChainContract.methods.addProduct(req.body.farmer, req.body.plantType, req.body.unitCost).call()
-            .then(function(pid){prodId=pid-1;});
-            console.log(prodId);
+            const txData = supplyChainContract.methods.addProduct(req.body.farmer, req.body.plantType, req.body.unitCost).encodeABI();
+            transfer = await buildSendTransaction(signer, signerKey, txData);
+            prodId = await supplyChainContract.methods.product_id().call() - 1;
         } catch (error) {
             console.error(error);
         return res.status(500).json({
@@ -264,13 +260,43 @@ router.post('/addProduct', async (req, res) => {
 
     res.status(201).json({
         message: 'Successfully added new Product!',
+        txHash: transfer,
         farmer: req.body.farmer,
         plantType: req.body.plantType,
-        farmerAddress: req.body.address,
         unitCost: req.body.unitCost,
         productId: prodId
     });
 
 });
+
+// send and sign transaction
+async function buildSendTransaction(account, accountKey, data) {
+    // FORM TRANSACTION
+    const txParams = {
+        from: account,
+        nonce: await web3.eth.getTransactionCount(account),
+        to: contractAddress,
+        value: 0,
+        gasLimit: web3.utils.toHex(10000000),//limit of gas willing to spend
+        gasPrice: web3.utils.toHex(web3.utils.toWei('0','gwei')),//transaction fee
+        data,
+    };
+    
+    //BUILD TRANSACTION
+    const tx = new Tx(txParams);
+  
+    //SIGN TRANSACTION
+    tx.sign(accountKey);
+    
+    //GET RAW TRANSACTION
+    const serializedTx = tx.serialize();
+    const rawTx = '0x' + serializedTx.toString('hex');
+    
+    //SEND SIGNED TRANSACTION
+    const transaction = await web3.eth.sendSignedTransaction(rawTx);
+    console.log('Transaction Hash: ', transaction.transactionHash);
+    return transaction.transactionHash;
+  
+  }
 
 module.exports = router ;

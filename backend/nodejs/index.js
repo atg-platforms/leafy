@@ -22,12 +22,12 @@ password: password,
 database: dbname
 });
 
-const farmer = require('./models/farmer');
+//const farmer = require('./models/farmer');
 //const transactionsRouter = require('./routes/transactions');
 
 app.use(bodyParser.json());
 
-app.use('/farmer', farmer);
+//app.use('/farmer', farmer);
 app.use('/token', erc20token);
 app.use('/supplychain', supplyChain);
 //app.use('/transactions', transactionsRouter);
