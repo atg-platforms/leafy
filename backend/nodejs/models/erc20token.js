@@ -15,7 +15,7 @@ const WEB3_USER = process.env.WEB3_USER;
 const WEB3_PASSWORD = process.env.WEB3_PASSWORD;
 const WEB3_PROVIDER = process.env.WEB3_PROVIDER;
 const signer = process.env.signer;
-const signerKey = Buffer.from('process.env.signerKey','hex');
+const signerKey = Buffer.from(process.env.signerKey,'hex');
 const contractAddress = process.env.erc20ContractAddress;
 
 var transfer = '';
