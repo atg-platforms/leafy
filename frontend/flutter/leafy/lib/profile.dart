@@ -30,6 +30,7 @@ class _State extends State<Profile> {
   String? _name;
   String? _participantAddress;
   String? _email;
+  String? _balance;
 
   @override
   void initState() {
@@ -61,14 +62,35 @@ class _State extends State<Profile> {
               SizedBox(
                 height: 10,
               ),
-              new Text(
-                  (_name?.isEmpty ?? true) ? "Loading..." : _name.toString(),
+              Card(
+                margin: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                color: Colors.grey,
+                child: ListTile(
+                  leading: Icon(Icons.person),
+                  title: Text(_name.toString()),
+                ),
               ),
               SizedBox(
                 height: 2,
               ),
-              Text(
-                  (_participantAddress?.isEmpty ?? true) ? "Loading..." : _participantAddress.toString(),
+          Card(
+            margin: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            color: Colors.grey,
+            child: ListTile(
+              leading: Icon(Icons.memory),
+              title: Text(_participantAddress.toString()),
+            ),
+          ),
+              SizedBox(
+                height: 2,
+              ),
+              Card(
+                margin: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                color: Colors.grey,
+                child: ListTile(
+                  leading: Icon(Icons.money),
+                  title: Text('Wallet Balance: LFY ' + _balance.toString()),
+                ),
               ),
               SizedBox(
                 height: 10,
@@ -79,7 +101,7 @@ class _State extends State<Profile> {
                 ),
               ),
               Card(
-                margin: EdgeInsets.symmetric(horizontal: 15, vertical: 15),
+                margin: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 color: Colors.grey,
                 child: ListTile(
                   leading: Icon(Icons.mail),
@@ -103,15 +125,39 @@ class _State extends State<Profile> {
   }
 
   Future<List<String>> assignProfile() async {
-    //var l = [];
     var xuserID = await FlutterSession().get("userID");
     dynamic xname = await FlutterSession().get("name");
     dynamic xparticipantAddress = await FlutterSession().get("addr");
     dynamic xemail = await FlutterSession().get("email");
+    dynamic token = await FlutterSession().get("token");
+    var balance = "";
+
+    final wallet = await http.get(
+      Uri.parse(
+          'https://bgmcwrffp9.execute-api.ap-southeast-1.amazonaws.com/latest/token/balance/' + xparticipantAddress.toString()),
+      headers: <String, String>{
+        'Content-Type': 'application/json; charset=UTF-8',
+        'x-api-key': token,
+      },
+    );
+
+    if (wallet.statusCode == 200) {
+      // If the server did return a 201 CREATED response,
+      // then parse the JSON.
+      var json = jsonDecode(wallet.body);
+      balance = json['balance'];
+      //return Account.fromJson(jsonDecode(response.body));
+    } else {
+      // If the server did not return a 201 CREATED response,
+      // then throw an exception.
+      throw Exception('Failed to checkout.');
+    }
+
     setState(() {
      _name = xname.toString();
      _participantAddress = xparticipantAddress.toString();
      _email = xemail.toString();
+     _balance = balance;
     });
     return [];
   }

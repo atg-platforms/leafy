@@ -2,7 +2,7 @@ const express = require('express');
 const sc = require('./supplychain');
 router = express.Router();
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 
 /*
@@ -28,8 +28,8 @@ router.post('/create', async function (req, res) {
 
   var pword = req.body.password;
 
-  bcrypt.genSalt(saltRounds, (err, salt) => {
-    bcrypt.hash(pword, salt, (err, hash) => {
+  var salt = bcrypt.genSaltSync(10);
+  var hash = bcrypt.hashSync(pword, salt);
         // Now we can store the password hash in db.
 
   let sql = `INSERT INTO account(email, password, name, participantType, city, participantAddress, userID) VALUES (?)`;
@@ -54,8 +54,6 @@ router.post('/create', async function (req, res) {
       message: 'Account created successfully',
     });
   })
-});
-});
 
 });
 

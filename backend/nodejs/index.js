@@ -3,7 +3,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 var express = require("express");
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 
 var app = express(),
@@ -32,32 +32,25 @@ app.post('/auth', function (request, response) {
 	if (username && password) {
 		connection.query('SELECT * FROM account WHERE email = ?', [username], function (error, results, fields) {
 			if (results.length > 0) {
-
-				bcrypt.compare(password, results[0].password, function(err, res) {
 					// if res == true, password matched
 					// else wrong password
-				if(res){  
-				return response.status(200).json({
-					email: results[0].email,
-					name: results[0].name,
-					participantType: results[0].participantType,
-					city: results[0].city,
-					participantAddress: results[0].participantAddress,
-					userID: results[0].userID,
-					token: '',
-					message: 'Login Successful',
-				});
-			}else {
-				return response.status(401).json({
-					message: 'Incorrect username/password',
-				});
+				if(bcrypt.compareSync(password,results[0].password)){  
+					return response.status(200).json({
+						email: results[0].email,
+						name: results[0].name,
+						participantType: results[0].participantType,
+						city: results[0].city,
+						participantAddress: results[0].participantAddress,
+						userID: results[0].userID,
+						token: '',
+						message: 'Login Successful',
+						});
 				}
-			});
-			} else {
-				return response.status(401).json({
-					message: 'Incorrect username/password',
-				});
 			}
+			return response.status(401).json({
+					message: 'Incorrect username/password',
+					});
+		
 		});
 	} else {
 		return response.status(401).json({
