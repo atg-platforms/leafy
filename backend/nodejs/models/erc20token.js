@@ -144,14 +144,4 @@ async function buildSendTransaction(account, accountKey, data) {
 
 }
 
-
-router.get('/accounts', async (req, res) => {
-  web3.eth.getAccounts().then(accounts => {
-    res.status(200).json({
-      message: 'Accounts in node:',
-      addresses: accounts
-    });
-  });
-});
-
 module.exports = router ;
